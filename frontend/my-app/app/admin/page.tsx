@@ -1,0 +1,106 @@
+"use client";
+
+import Link from "next/link";
+import { useCallback } from "react";
+
+import { CreateEventForm } from "./CreateEventForm";
+import { usePolledResource } from "@/hooks/usePolledResource";
+import { Alert, Card, Spinner, StatTile } from "@/components/ui";
+import { formatEventDate, listEvents } from "@/lib/api";
+
+export default function AdminPage() {
+  const fetcher = useCallback(() => listEvents(), []);
+  const { data: events, loading, error, refresh } = usePolledResource(fetcher, {
+    fallbackMessage: "Could not load events.",
+  });
+
+  const totals = (events ?? []).reduce(
+    (acc, event) => ({
+      seats: acc.seats + event.total_seats,
+      booked: acc.booked + event.booked_seats,
+    }),
+    { seats: 0, booked: 0 },
+  );
+
+  return (
+    <div className="space-y-8">
+      <header>
+        <h1 className="text-2xl font-semibold tracking-tight">Admin</h1>
+        <p className="mt-1 text-sm text-muted">
+          Create events and their seat layouts, then open an event to block
+          seats and watch bookings come in. No sign-in - this route is open by
+          design for the demo.
+        </p>
+      </header>
+
+      {error && (
+        <Alert tone="danger" title="Something went wrong">
+          {error}
+        </Alert>
+      )}
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold">Events</h2>
+
+        {loading && <Spinner label="Loading events" />}
+
+        {events && events.length > 0 && (
+          <div className="grid gap-3 sm:grid-cols-3">
+            <StatTile label="Events" value={events.length} />
+            <StatTile label="Seats configured" value={totals.seats} />
+            <StatTile label="Seats booked" value={totals.booked} tone="accent" />
+          </div>
+        )}
+
+        {events?.length === 0 && (
+          <Card>
+            <p className="text-sm text-muted">
+              No events yet. Create the first one below.
+            </p>
+          </Card>
+        )}
+
+        <div className="space-y-2">
+          {events?.map((event) => (
+            <Link
+              key={event.id}
+              href={`/admin/events/${event.id}`}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface px-5 py-4 transition hover:border-accent"
+            >
+              <div>
+                <p className="font-medium">{event.name}</p>
+                <p className="mt-0.5 text-sm text-muted">
+                  {formatEventDate(event.event_date)}
+                  {event.venue && ` - ${event.venue}`} - {event.row_count} rows &times;{" "}
+                  {event.column_count}
+                </p>
+              </div>
+              <div className="flex items-center gap-5 text-sm tabular-nums">
+                <span className="text-muted">
+                  <span className="font-semibold text-foreground">
+                    {event.booked_seats}
+                  </span>{" "}
+                  booked
+                </span>
+                <span className="text-muted">
+                  <span className="font-semibold text-foreground">
+                    {event.available_seats}
+                  </span>{" "}
+                  free
+                </span>
+                <span aria-hidden className="text-muted">
+                  &rarr;
+                </span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold">Create an event</h2>
+        <CreateEventForm onCreated={refresh} />
+      </section>
+    </div>
+  );
+}
