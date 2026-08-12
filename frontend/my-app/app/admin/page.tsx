@@ -25,7 +25,7 @@ export default function AdminPage() {
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Admin</h1>
+        <h1 className="display-xl text-ink">Admin</h1>
         <p className="mt-1 text-sm text-muted">
           Create events and their seat layouts, then open an event to block
           seats and watch bookings come in. No sign-in - this route is open by
@@ -40,7 +40,7 @@ export default function AdminPage() {
       )}
 
       <section className="space-y-4">
-        <h2 className="text-lg font-semibold">Events</h2>
+        <h2 className="display-sm text-ink">Events</h2>
 
         {loading && <Spinner label="Loading events" />}
 
@@ -65,7 +65,7 @@ export default function AdminPage() {
             <Link
               key={event.id}
               href={`/admin/events/${event.id}`}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface px-5 py-4 transition hover:border-accent"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-hairline bg-canvas px-5 py-4 transition hover:border-ink"
             >
               <div>
                 <p className="font-medium">{event.name}</p>
@@ -77,13 +77,13 @@ export default function AdminPage() {
               </div>
               <div className="flex items-center gap-5 text-sm tabular-nums">
                 <span className="text-muted">
-                  <span className="font-semibold text-foreground">
+                  <span className="font-semibold text-ink">
                     {event.booked_seats}
                   </span>{" "}
                   booked
                 </span>
                 <span className="text-muted">
-                  <span className="font-semibold text-foreground">
+                  <span className="font-semibold text-ink">
                     {event.available_seats}
                   </span>{" "}
                   free
@@ -98,7 +98,7 @@ export default function AdminPage() {
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-lg font-semibold">Create an event</h2>
+        <h2 className="display-sm text-ink">Create an event</h2>
         <CreateEventForm onCreated={refresh} />
       </section>
     </div>

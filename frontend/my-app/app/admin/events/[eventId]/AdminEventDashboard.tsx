@@ -133,7 +133,7 @@ export function AdminEventDashboard({ eventId }: { eventId: number }) {
         <Alert tone="danger" title="Could not load this event">
           {error}
         </Alert>
-        <Link href="/admin" className="text-sm text-accent underline">
+        <Link href="/admin" className="text-sm text-primary underline">
           Back to admin
         </Link>
       </div>
@@ -150,10 +150,10 @@ export function AdminEventDashboard({ eventId }: { eventId: number }) {
     <div className="space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <Link href="/admin" className="text-sm text-muted hover:text-foreground">
+          <Link href="/admin" className="text-sm text-muted hover:text-ink">
             &larr; Admin
           </Link>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">{event.name}</h1>
+          <h1 className="mt-1 display-lg text-ink">{event.name}</h1>
           <p className="mt-1 text-sm text-muted">
             {formatEventDate(event.event_date)}
             {event.venue && ` - ${event.venue}`} - {event.row_count} rows &times;{" "}
@@ -163,7 +163,7 @@ export function AdminEventDashboard({ eventId }: { eventId: number }) {
         <div className="flex items-center gap-2">
           <Link
             href={`/events/${event.id}`}
-            className="rounded-lg border border-line px-4 py-2 text-sm font-medium transition hover:border-accent"
+            className="rounded-sm border border-hairline px-4 py-2 text-sm font-medium transition hover:border-ink"
           >
             Open booking page
           </Link>
@@ -192,8 +192,8 @@ export function AdminEventDashboard({ eventId }: { eventId: number }) {
       </section>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <Card>
-          <h2 className="mb-4 text-base font-semibold">Seat map</h2>
+        <Card className="self-start">
+          <h2 className="mb-4 display-sm">Seat map</h2>
           <SeatMap
             seatMap={seatMap}
             selectedIds={pickedIds}
@@ -201,7 +201,7 @@ export function AdminEventDashboard({ eventId }: { eventId: number }) {
             disabled={working}
             isSelectable={(seat) => seat.status !== "BOOKED"}
           />
-          <SeatLegend className="mt-6 border-t border-line pt-4" />
+          <SeatLegend className="mt-6 border-t border-hairline pt-4" />
           <p className="mt-3 text-xs text-muted">
             Click any seat that is not booked to select it, then block or unblock
             the selection. Blocked seats stay unbookable until you release them.
@@ -212,7 +212,7 @@ export function AdminEventDashboard({ eventId }: { eventId: number }) {
           {notice && <Alert tone={notice.tone}>{notice.text}</Alert>}
 
           <Card>
-            <h2 className="text-base font-semibold">Block seats</h2>
+            <h2 className="display-sm text-ink">Block seats</h2>
             {picked.length === 0 ? (
               <p className="mt-2 text-sm text-muted">
                 Select seats on the map to hold them back for VIPs, or to release
@@ -235,7 +235,7 @@ export function AdminEventDashboard({ eventId }: { eventId: number }) {
                   </span>
                 </p>
                 <input
-                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm placeholder:text-muted focus:border-accent focus:outline-none"
+                  className="w-full rounded-sm border border-hairline bg-canvas px-3 py-2 text-sm placeholder:text-muted focus:border-ink focus:outline-none"
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   placeholder="Reason (optional): VIP hold, sound desk..."
@@ -269,7 +269,7 @@ export function AdminEventDashboard({ eventId }: { eventId: number }) {
 
           {summary && (
             <Card>
-              <h2 className="text-base font-semibold">At a glance</h2>
+              <h2 className="display-sm text-ink">At a glance</h2>
               <dl className="mt-3 space-y-2 text-sm">
                 <div className="flex justify-between">
                   <dt className="text-muted">Active bookings</dt>
@@ -283,7 +283,7 @@ export function AdminEventDashboard({ eventId }: { eventId: number }) {
                     {summary.cancelled_bookings}
                   </dd>
                 </div>
-                <div className="flex justify-between border-t border-line pt-2">
+                <div className="flex justify-between border-t border-hairline pt-2">
                   <dt className="text-muted">Revenue</dt>
                   <dd className="font-semibold tabular-nums">
                     {formatPrice(summary.revenue_cents)}
@@ -296,7 +296,7 @@ export function AdminEventDashboard({ eventId }: { eventId: number }) {
       </div>
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Bookings</h2>
+        <h2 className="display-sm text-ink">Bookings</h2>
         {summaryError && <Alert tone="danger">{summaryError}</Alert>}
         {!summary && !summaryError && <Spinner label="Loading bookings" />}
 
@@ -309,10 +309,10 @@ export function AdminEventDashboard({ eventId }: { eventId: number }) {
         )}
 
         {summary && summary.bookings.length > 0 && (
-          <div className="overflow-x-auto rounded-xl border border-line bg-surface">
+          <div className="overflow-x-auto rounded-md border border-hairline bg-canvas">
             <table className="w-full min-w-[46rem] text-sm">
               <thead>
-                <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
+                <tr className="border-b border-hairline text-left text-xs uppercase tracking-wide text-muted">
                   <th className="px-4 py-3 font-medium">Reference</th>
                   <th className="px-4 py-3 font-medium">Booker</th>
                   <th className="px-4 py-3 font-medium">Seats</th>
@@ -325,14 +325,14 @@ export function AdminEventDashboard({ eventId }: { eventId: number }) {
                 {summary.bookings.map((booking) => (
                   <tr
                     key={booking.id}
-                    className={`border-b border-line last:border-0 ${
+                    className={`border-b border-hairline last:border-0 ${
                       booking.status === "CANCELLED" ? "opacity-60" : ""
                     }`}
                   >
                     <td className="px-4 py-3">
                       <Link
                         href={`/bookings/${booking.reference}`}
-                        className="font-mono text-xs text-accent underline"
+                        className="font-mono text-xs text-primary underline"
                       >
                         {booking.reference}
                       </Link>

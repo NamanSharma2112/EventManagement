@@ -142,7 +142,7 @@ export function EventBooking({ eventId }: { eventId: number }) {
         <Alert tone="danger" title="Could not load this event">
           {error ?? "This event does not exist."}
         </Alert>
-        <Link href="/" className="text-sm text-accent underline">
+        <Link href="/" className="text-sm text-primary underline">
           Back to all events
         </Link>
       </div>
@@ -156,10 +156,10 @@ export function EventBooking({ eventId }: { eventId: number }) {
     <div className="space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <Link href="/" className="text-sm text-muted hover:text-foreground">
+          <Link href="/" className="text-sm text-muted hover:text-ink">
             &larr; All events
           </Link>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">{event.name}</h1>
+          <h1 className="mt-1 display-lg text-ink">{event.name}</h1>
           <p className="mt-1 text-sm text-muted">
             {formatEventDate(event.event_date)}
             {event.venue && ` - ${event.venue}`}
@@ -167,7 +167,7 @@ export function EventBooking({ eventId }: { eventId: number }) {
         </div>
         <div className="flex items-center gap-3 text-sm">
           <span className="tabular-nums text-muted">
-            <span className="font-semibold text-foreground">
+            <span className="font-semibold text-ink">
               {seatMap.available_seats}
             </span>{" "}
             of {seatMap.total_seats} free
@@ -179,7 +179,7 @@ export function EventBooking({ eventId }: { eventId: number }) {
       </header>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <Card>
+        <Card className="self-start">
           <SeatMap
             seatMap={seatMap}
             selectedIds={selectedIds}
@@ -187,7 +187,7 @@ export function EventBooking({ eventId }: { eventId: number }) {
             onToggleSeat={toggleSeat}
             disabled={submitting}
           />
-          <SeatLegend className="mt-6 border-t border-line pt-4" />
+          <SeatLegend className="mt-6 border-t border-hairline pt-4" />
         </Card>
 
         <div className="space-y-4 lg:sticky lg:top-20 lg:self-start">
@@ -241,7 +241,7 @@ export function EventBooking({ eventId }: { eventId: number }) {
           )}
 
           <Card>
-            <h2 className="text-base font-semibold">Your selection</h2>
+            <h2 className="display-sm text-ink">Your selection</h2>
 
             {selected.length === 0 ? (
               <p className="mt-2 text-sm text-muted">
@@ -254,7 +254,7 @@ export function EventBooking({ eventId }: { eventId: number }) {
                   {selected.map((seat) => (
                     <li
                       key={seat.id}
-                      className="flex items-center justify-between gap-2 rounded-lg bg-surface-muted px-3 py-1.5 text-sm"
+                      className="flex items-center justify-between gap-2 rounded-sm bg-surface-strong px-3 py-1.5 text-sm"
                     >
                       <span>
                         <span className="font-semibold">{seat.label}</span>
@@ -270,7 +270,7 @@ export function EventBooking({ eventId }: { eventId: number }) {
                           type="button"
                           onClick={() => toggleSeat(seat)}
                           aria-label={`Remove seat ${seat.label}`}
-                          className="rounded px-1 text-muted transition hover:text-danger"
+                          className="rounded px-1 text-muted transition hover:text-error"
                         >
                           &times;
                         </button>
@@ -278,7 +278,7 @@ export function EventBooking({ eventId }: { eventId: number }) {
                     </li>
                   ))}
                 </ul>
-                <div className="mt-3 flex justify-between border-t border-line pt-3 text-sm font-semibold">
+                <div className="mt-3 flex justify-between border-t border-hairline pt-3 text-sm font-semibold">
                   <span>
                     Total ({selected.length} seat{selected.length === 1 ? "" : "s"})
                   </span>
@@ -289,7 +289,7 @@ export function EventBooking({ eventId }: { eventId: number }) {
           </Card>
 
           <Card>
-            <h2 className="text-base font-semibold">Your details</h2>
+            <h2 className="display-sm text-ink">Your details</h2>
             <form onSubmit={submit} className="mt-3 space-y-3">
               <Field label="Name">
                 <input

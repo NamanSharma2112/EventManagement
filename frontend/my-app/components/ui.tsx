@@ -1,4 +1,10 @@
-/** Small presentational building blocks shared by every page. */
+/**
+ * Presentational building blocks, styled to DESIGN.md (Airbnb-design-analysis).
+ *
+ * Shape scale: buttons 8px (rounded-sm), cards 14px (rounded-md), badges full.
+ * Elevation is a single tier (`shadow-tier`) applied on hover-float and nowhere
+ * else. Rausch is the only accent and is reserved for primary CTAs.
+ */
 
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -12,7 +18,7 @@ export function Card({
 }) {
   return (
     <div
-      className={`rounded-xl border border-line bg-surface p-5 shadow-sm ${className}`}
+      className={`rounded-md border border-hairline bg-canvas p-6 ${className}`}
     >
       {children}
     </div>
@@ -29,18 +35,16 @@ export function StatTile({
   tone?: "default" | "success" | "danger" | "accent";
 }) {
   const toneClass = {
-    default: "text-foreground",
+    default: "text-ink",
     success: "text-success",
-    danger: "text-danger",
-    accent: "text-accent",
+    danger: "text-error",
+    accent: "text-primary",
   }[tone];
 
   return (
-    <div className="rounded-lg border border-line bg-surface px-4 py-3">
-      <div className="text-xs font-medium uppercase tracking-wide text-muted">
-        {label}
-      </div>
-      <div className={`mt-1 text-2xl font-semibold tabular-nums ${toneClass}`}>
+    <div className="rounded-md border border-hairline bg-canvas px-5 py-4">
+      <div className="uppercase-tag text-muted">{label}</div>
+      <div className={`mt-1.5 text-[26px] font-bold leading-tight tabular-nums ${toneClass}`}>
         {value}
       </div>
     </div>
@@ -57,16 +61,16 @@ export function Alert({
   children: ReactNode;
 }) {
   const styles = {
-    success: "border-success/40 bg-success-soft text-success",
-    danger: "border-danger/40 bg-danger-soft text-danger",
-    warning: "border-warning/40 bg-warning-soft text-warning",
-    info: "border-accent/40 bg-accent-soft text-accent",
+    success: "border-success/25 bg-success-soft text-success",
+    danger: "border-error/25 bg-error-soft text-error",
+    warning: "border-warning/25 bg-warning-soft text-warning",
+    info: "border-primary/25 bg-canvas text-primary",
   }[tone];
 
   return (
-    <div className={`rounded-lg border px-4 py-3 text-sm ${styles}`} role="status">
-      {title && <p className="font-semibold">{title}</p>}
-      <div className={title ? "mt-1" : ""}>{children}</div>
+    <div className={`rounded-sm border px-4 py-3.5 text-sm ${styles}`} role="status">
+      {title && <p className="title-md">{title}</p>}
+      <div className={title ? "mt-1 leading-relaxed" : "leading-relaxed"}>{children}</div>
     </div>
   );
 }
@@ -79,21 +83,28 @@ export function Button({
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "ghost" | "danger";
 }) {
+  // 48px tall, 8px radius, weight 500 -- button-primary in DESIGN.md.
+  const base =
+    "inline-flex h-12 items-center justify-center gap-2 rounded-sm px-6 text-base " +
+    "font-medium transition disabled:cursor-not-allowed";
+
   const variants = {
     primary:
-      "bg-accent text-accent-contrast hover:opacity-90 disabled:opacity-40",
+      "bg-primary text-on-primary hover:bg-primary-active " +
+      "disabled:bg-primary-disabled disabled:text-on-primary",
     secondary:
-      "border border-line-strong bg-surface text-foreground hover:border-accent disabled:opacity-40",
-    ghost: "text-muted hover:text-foreground disabled:opacity-40",
+      "border border-ink bg-canvas text-ink hover:bg-surface-soft " +
+      "disabled:border-border-strong disabled:text-muted-soft disabled:hover:bg-canvas",
+    ghost:
+      "px-2 text-ink underline-offset-4 hover:underline disabled:text-muted-soft " +
+      "disabled:hover:no-underline",
     danger:
-      "border border-danger/40 bg-danger-soft text-danger hover:opacity-80 disabled:opacity-40",
+      "border border-error bg-canvas text-error hover:bg-error-soft " +
+      "disabled:border-border-strong disabled:text-muted-soft",
   }[variant];
 
   return (
-    <button
-      {...props}
-      className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed ${variants} ${className}`}
-    >
+    <button {...props} className={`${base} ${variants} ${className}`}>
       {children}
     </button>
   );
@@ -110,23 +121,28 @@ export function Field({
 }) {
   return (
     <label className="block">
-      <span className="text-sm font-medium text-foreground">{label}</span>
-      {hint && <span className="ml-2 text-xs text-muted">{hint}</span>}
-      <div className="mt-1.5">{children}</div>
+      <span className="text-sm font-medium text-ink">{label}</span>
+      {hint && <span className="ml-2 text-[13px] text-muted">{hint}</span>}
+      <div className="mt-2">{children}</div>
     </label>
   );
 }
 
+/**
+ * text-input: 56px tall, 8px radius, hairline outline. On focus the border
+ * thickens to 2px ink -- no glow, no ring (DESIGN.md, Forms).
+ */
 export const inputClass =
-  "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-foreground " +
-  "placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30";
+  "h-14 w-full rounded-sm border border-hairline bg-canvas px-3.5 text-base text-ink " +
+  "placeholder:text-muted-soft focus:border-2 focus:border-ink focus:px-[13px] " +
+  "focus:outline-none";
 
 export function Spinner({ label = "Loading" }: { label?: string }) {
   return (
-    <div className="flex items-center gap-2 text-sm text-muted" role="status">
+    <div className="flex items-center gap-2.5 text-sm text-muted" role="status">
       <span
         aria-hidden
-        className="h-4 w-4 animate-spin rounded-full border-2 border-line-strong border-t-accent"
+        className="h-4 w-4 animate-spin rounded-full border-2 border-hairline border-t-primary"
       />
       {label}
     </div>
@@ -141,7 +157,7 @@ export function SeatSkeleton({ rows = 6, columns = 10 }) {
           {Array.from({ length: columns }).map((__, c) => (
             <div
               key={c}
-              className="h-7 w-7 animate-pulse rounded bg-surface-muted"
+              className="h-7 w-7 animate-pulse rounded-xs bg-surface-strong"
               style={{ animationDelay: `${(r * columns + c) * 12}ms` }}
             />
           ))}
@@ -162,12 +178,12 @@ export function EmptyState({
 }) {
   return (
     <Card className="text-center">
-      <p className="text-base font-semibold">{title}</p>
-      {children && <p className="mt-1 text-sm text-muted">{children}</p>}
+      <p className="display-sm">{title}</p>
+      {children && <p className="mt-2 text-sm text-muted">{children}</p>}
       {action && (
         <Link
           href={action.href}
-          className="mt-4 inline-flex rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-contrast"
+          className="mt-5 inline-flex h-12 items-center rounded-sm bg-primary px-6 text-base font-medium text-on-primary transition hover:bg-primary-active"
         >
           {action.label}
         </Link>
@@ -178,11 +194,11 @@ export function EmptyState({
 
 export function StatusPill({ status }: { status: "CONFIRMED" | "CANCELLED" }) {
   return status === "CONFIRMED" ? (
-    <span className="inline-flex rounded-full border border-success/40 bg-success-soft px-2 py-0.5 text-xs font-medium text-success">
+    <span className="inline-flex rounded-full border border-success/25 bg-success-soft px-2.5 py-1 text-[11px] font-semibold text-success">
       Confirmed
     </span>
   ) : (
-    <span className="inline-flex rounded-full border border-line-strong bg-surface-muted px-2 py-0.5 text-xs font-medium text-muted">
+    <span className="inline-flex rounded-full border border-hairline bg-surface-strong px-2.5 py-1 text-[11px] font-semibold text-muted">
       Cancelled
     </span>
   );

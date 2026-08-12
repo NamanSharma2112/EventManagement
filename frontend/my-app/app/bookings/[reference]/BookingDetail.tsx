@@ -54,7 +54,7 @@ export function BookingDetail({ reference }: { reference: string }) {
         <Alert tone="danger" title="Booking not found">
           {error ?? `No booking found with reference ${reference}.`}
         </Alert>
-        <Link href="/bookings" className="text-sm text-accent underline">
+        <Link href="/bookings" className="text-sm text-primary underline">
           Try another reference
         </Link>
       </div>
@@ -65,7 +65,7 @@ export function BookingDetail({ reference }: { reference: string }) {
 
   return (
     <div className="mx-auto max-w-xl space-y-4">
-      <Link href="/" className="text-sm text-muted hover:text-foreground">
+      <Link href="/" className="text-sm text-muted hover:text-ink">
         &larr; All events
       </Link>
 
@@ -87,8 +87,8 @@ export function BookingDetail({ reference }: { reference: string }) {
           <StatusPill status={booking.status} />
         </div>
 
-        <div className="border-t border-line pt-4">
-          <h1 className="text-lg font-semibold">{booking.event_name}</h1>
+        <div className="border-t border-hairline pt-4">
+          <h1 className="display-sm text-ink">{booking.event_name}</h1>
           <p className="mt-1 text-sm text-muted">
             Booked {formatTimestamp(booking.created_at)}
             {booking.cancelled_at &&
@@ -96,7 +96,7 @@ export function BookingDetail({ reference }: { reference: string }) {
           </p>
         </div>
 
-        <dl className="grid grid-cols-2 gap-4 border-t border-line pt-4 text-sm">
+        <dl className="grid grid-cols-2 gap-4 border-t border-hairline pt-4 text-sm">
           <div>
             <dt className="text-muted">Name</dt>
             <dd className="mt-0.5 font-medium">{booking.booker_name}</dd>
@@ -107,7 +107,7 @@ export function BookingDetail({ reference }: { reference: string }) {
           </div>
         </dl>
 
-        <div className="border-t border-line pt-4">
+        <div className="border-t border-hairline pt-4">
           <p className="text-sm text-muted">
             {booking.seats.length} seat{booking.seats.length === 1 ? "" : "s"}
           </p>
@@ -115,7 +115,7 @@ export function BookingDetail({ reference }: { reference: string }) {
             {booking.seats.map((seat) => (
               <li
                 key={seat.seat_id}
-                className={`flex items-center justify-between rounded-lg bg-surface-muted px-3 py-2 text-sm ${
+                className={`flex items-center justify-between rounded-sm bg-surface-strong px-3 py-2 text-sm ${
                   cancelled ? "opacity-60" : ""
                 }`}
               >
@@ -129,7 +129,7 @@ export function BookingDetail({ reference }: { reference: string }) {
               </li>
             ))}
           </ul>
-          <div className="mt-3 flex justify-between border-t border-line pt-3 font-semibold">
+          <div className="mt-3 flex justify-between border-t border-hairline pt-3 font-semibold">
             <span>Total</span>
             <span className="tabular-nums">
               {formatPrice(booking.total_amount_cents)}
@@ -138,7 +138,7 @@ export function BookingDetail({ reference }: { reference: string }) {
         </div>
 
         {!cancelled && (
-          <div className="border-t border-line pt-4">
+          <div className="border-t border-hairline pt-4">
             {confirmingCancel ? (
               <div className="space-y-3">
                 <p className="text-sm text-muted">
@@ -167,7 +167,7 @@ export function BookingDetail({ reference }: { reference: string }) {
         )}
 
         {cancelled && (
-          <p className="border-t border-line pt-4 text-sm text-muted">
+          <p className="border-t border-hairline pt-4 text-sm text-muted">
             These seats have been released and are available to book again.
           </p>
         )}
@@ -175,7 +175,7 @@ export function BookingDetail({ reference }: { reference: string }) {
 
       <Link
         href={`/events/${booking.event_id}`}
-        className="inline-block text-sm text-accent underline"
+        className="inline-block text-sm text-primary underline"
       >
         Back to the seat map for {booking.event_name}
       </Link>

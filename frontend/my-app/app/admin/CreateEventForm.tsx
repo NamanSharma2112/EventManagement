@@ -147,7 +147,7 @@ export function CreateEventForm({ onCreated }: { onCreated: () => void }) {
           </Field>
         </div>
 
-        <fieldset className="space-y-4 rounded-lg border border-line p-4">
+        <fieldset className="space-y-4 rounded-sm border border-hairline p-4">
           <legend className="px-1 text-sm font-medium">Seat layout</legend>
 
           <div className="grid gap-4 sm:grid-cols-3">
@@ -175,7 +175,7 @@ export function CreateEventForm({ onCreated }: { onCreated: () => void }) {
             </Field>
             <div className="flex items-end">
               <p className="text-sm text-muted">
-                <span className="font-semibold tabular-nums text-foreground">
+                <span className="font-semibold tabular-nums text-ink">
                   {seatTotal}
                 </span>{" "}
                 seats will be created
@@ -188,7 +188,7 @@ export function CreateEventForm({ onCreated }: { onCreated: () => void }) {
               type="checkbox"
               checked={useTiers}
               onChange={(e) => setUseTiers(e.target.checked)}
-              className="h-4 w-4 accent-[var(--accent)]"
+              className="h-4 w-4 accent-[var(--primary)]"
             />
             Split the rows into priced sections
           </label>
@@ -249,7 +249,7 @@ export function CreateEventForm({ onCreated }: { onCreated: () => void }) {
                   Add section
                 </Button>
                 <p
-                  className={`text-sm ${tiersCoverLayout ? "text-muted" : "text-danger"}`}
+                  className={`text-sm ${tiersCoverLayout ? "text-muted" : "text-error"}`}
                 >
                   Sections cover{" "}
                   <span className="font-semibold tabular-nums">{tierRowTotal}</span> of{" "}

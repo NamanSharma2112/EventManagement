@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -191,7 +191,9 @@ def cancel_booking(db: Session, reference: str) -> Booking:
 
     try:
         booking.status = BookingStatus.CANCELLED
-        booking.cancelled_at = datetime.now(timezone.utc)
+        # Naive, to match created_at's MySQL NOW() default -- both are the
+        # server's wall clock. Run the deployment in UTC.
+        booking.cancelled_at = datetime.now()
         for booking_seat in booking.seats:
             booking_seat.is_active = False
         db.commit()

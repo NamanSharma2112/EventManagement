@@ -123,10 +123,10 @@ export function SeatMap({
       </div>
 
       {seatMap.event.sections.length > 1 && (
-        <ul className="mt-5 flex flex-wrap gap-x-5 gap-y-1 border-t border-line pt-4 text-xs text-muted">
+        <ul className="mt-5 flex flex-wrap gap-x-5 gap-y-1 border-t border-hairline pt-4 text-xs text-muted">
           {seatMap.event.sections.map((section) => (
             <li key={section.id}>
-              <span className="font-medium text-foreground">{section.name}</span>{" "}
+              <span className="font-medium text-ink">{section.name}</span>{" "}
               {formatPrice(section.price_cents)}
             </li>
           ))}

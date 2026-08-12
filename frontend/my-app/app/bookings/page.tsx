@@ -12,7 +12,7 @@ export default function BookingLookupPage() {
   return (
     <div className="mx-auto max-w-md space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Find your booking</h1>
+        <h1 className="display-xl text-ink">Find your booking</h1>
         <p className="mt-1 text-sm text-muted">
           Enter the reference from your confirmation, e.g. BK-A1B2C3D4.
         </p>
