@@ -1,26 +1,305 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ---------------------------------------------------------------------------
+   Tokens from DESIGN.md (Airbnb-design-analysis).
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+   White canvas, near-black ink, and a single voltage of Rausch (#ff385c)
+   carrying every primary CTA. Soft shape language throughout: 8px buttons,
+   14px cards, full pills for badges. One shadow tier, no progressive elevation.
+
+   DESIGN.md notes Airbnb has no dark mode on the public web. The dark block
+   below is this project's own extension, built from the same tokens so Rausch
+   stays the only accent -- an app people open in a dim room should not be a
+   wall of white.
+   --------------------------------------------------------------------------- */
+:root {
+  /* Brand */
+  --primary: #ff385c;
+  --primary-active: #e00b41;
+  --primary-disabled: #ffd1da;
+  --on-primary: #ffffff;
+
+  /* Surface */
+  --canvas: #ffffff;
+  --surface-soft: #f7f7f7;
+  --surface-strong: #f2f2f2;
+
+  /* Hairlines */
+  --hairline: #dddddd;
+  --hairline-soft: #ebebeb;
+  --border-strong: #c1c1c1;
+
+  /* Text */
+  --ink: #222222;
+  --body: #3f3f3f;
+  --muted: #6a6a6a;
+  --muted-soft: #929292;
+
+  /* Semantic */
+  --error: #c13515;
+  --error-hover: #b32505;
+  --error-soft: #fdf0ee;
+  --success: #067647;
+  --success-soft: #ecf7f1;
+  --warning: #8a5a00;
+  --warning-soft: #fdf5e6;
+
+  /* Seats */
+  --seat-available: #ffffff;
+  --seat-available-border: var(--hairline);
+  --seat-selected: var(--primary);
+  --seat-booked: #929292;
+  --seat-blocked: var(--surface-strong);
+
+  /* The single shadow tier in the system. */
+  --shadow-card:
+    rgba(0, 0, 0, 0.02) 0 0 0 1px,
+    rgba(0, 0, 0, 0.04) 0 2px 6px 0,
+    rgba(0, 0, 0, 0.1) 0 4px 8px 0;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --primary: #ff5a77;
+    --primary-active: #ff385c;
+    --primary-disabled: #5c2632;
+    --on-primary: #ffffff;
+
+    --canvas: #101012;
+    --surface-soft: #17181b;
+    --surface-strong: #1f2125;
+
+    --hairline: #2c2e33;
+    --hairline-soft: #232529;
+    --border-strong: #414449;
+
+    --ink: #f2f2f3;
+    --body: #d4d5d8;
+    --muted: #9a9ba1;
+    --muted-soft: #75767c;
+
+    --error: #ff8a7a;
+    --error-hover: #ffa093;
+    --error-soft: #2a1512;
+    --success: #4bd394;
+    --success-soft: #0f2a1e;
+    --warning: #f0c274;
+    --warning-soft: #2a2113;
+
+    --seat-available: #1f2125;
+    --seat-available-border: #3a3d43;
+    --seat-selected: var(--primary);
+    --seat-booked: #5a5d64;
+    --seat-blocked: #26282d;
+
+    --shadow-card:
+      rgba(0, 0, 0, 0.4) 0 0 0 1px,
+      rgba(0, 0, 0, 0.4) 0 2px 6px 0,
+      rgba(0, 0, 0, 0.5) 0 4px 8px 0;
   }
 }
 
+@theme inline {
+  --color-primary: var(--primary);
+  --color-primary-active: var(--primary-active);
+  --color-primary-disabled: var(--primary-disabled);
+  --color-on-primary: var(--on-primary);
+
+  --color-canvas: var(--canvas);
+  --color-surface-soft: var(--surface-soft);
+  --color-surface-strong: var(--surface-strong);
+
+  --color-hairline: var(--hairline);
+  --color-hairline-soft: var(--hairline-soft);
+  --color-border-strong: var(--border-strong);
+
+  --color-ink: var(--ink);
+  --color-body: var(--body);
+  --color-muted: var(--muted);
+  --color-muted-soft: var(--muted-soft);
+
+  --color-error: var(--error);
+  --color-error-soft: var(--error-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+
+  /* rounded scale: xs 4 / sm 8 / md 14 / lg 20 / xl 32 / full */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 32px;
+
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-geist-mono);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--canvas);
+  color: var(--ink);
+}
+
+/* Type scale from DESIGN.md. Display weights stay modest -- the system leans on
+   whitespace and shape rather than typographic muscle. */
+.display-xl {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.43;
+}
+.display-lg {
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.18;
+  letter-spacing: -0.44px;
+}
+.display-md {
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.43;
+}
+.display-sm {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.18px;
+}
+.title-md {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.uppercase-tag {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.18;
+  letter-spacing: 0.32px;
+  text-transform: uppercase;
+}
+
+.shadow-tier {
+  box-shadow: var(--shadow-card);
+}
+
+/* ---------------------------------------------------------------------------
+   Seats.
+
+   Status is carried by colour *and* by shape, so the map still reads correctly
+   in greyscale or with a colour vision deficiency: available seats are
+   outlined, selected seats are Rausch-filled, booked seats are solid grey, and
+   blocked seats are hatched.
+   --------------------------------------------------------------------------- */
+.seat {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  min-width: 1.65rem;
+  border-radius: var(--radius-xs) var(--radius-xs) var(--radius-sm) var(--radius-sm);
+  border: 1px solid transparent;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  transition:
+    transform 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.seat:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.seat--available {
+  background: var(--seat-available);
+  border-color: var(--seat-available-border);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+/* Airbnb's card hover is a subtle elevation lift, not a colour flood. */
+.seat--available:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card);
+}
+
+.seat--selected {
+  background: var(--seat-selected);
+  border-color: var(--seat-selected);
+  color: var(--on-primary);
+  cursor: pointer;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card);
+}
+
+.seat--booked {
+  background: var(--seat-booked);
+  border-color: var(--seat-booked);
+  color: color-mix(in srgb, var(--canvas) 75%, transparent);
+  cursor: not-allowed;
+}
+
+.seat--blocked {
+  border-color: var(--border-strong);
+  color: var(--muted-soft);
+  cursor: not-allowed;
+  background-color: var(--seat-blocked);
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 3px,
+    color-mix(in srgb, var(--muted-soft) 55%, transparent) 3px,
+    color-mix(in srgb, var(--muted-soft) 55%, transparent) 5px
+  );
+}
+
+/* A seat the server just told us was taken while we had it selected. */
+.seat--conflict {
+  animation: seat-shake 420ms ease;
+  border-color: var(--error) !important;
+  box-shadow: 0 0 0 2px var(--error);
+}
+
+@keyframes seat-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-3px);
+  }
+  75% {
+    transform: translateX(3px);
+  }
+}
+
+/* The curved stage marker above the first row. */
+.stage {
+  height: 2.25rem;
+  border-radius: 0 0 100% 100% / 0 0 100% 100%;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--primary) 14%, transparent),
+    transparent
+  );
+  border-top: 2px solid color-mix(in srgb, var(--primary) 45%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seat,
+  .seat--conflict {
+    transition: none;
+    animation: none;
+  }
+  .seat--available:hover,
+  .seat--selected {
+    transform: none;
+  }
 }

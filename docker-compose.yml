@@ -1,0 +1,64 @@
+# The whole stack in one command:
+#
+#   docker compose up --build
+#
+#   frontend  http://localhost:3000
+#   API docs  http://localhost:8000/docs
+#
+# MySQL runs in UTC so the timestamps the API writes line up with the ones it
+# reads back.
+
+services:
+  db:
+    image: mysql:8.0
+    command: --default-time-zone=+00:00
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: seatbooking
+      MYSQL_USER: seatuser
+      MYSQL_PASSWORD: seatpass
+      TZ: UTC
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # Applied only on first boot, when the data directory is empty.
+      - ./backend/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-prootpass"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  api:
+    build: ./backend
+    environment:
+      MYSQL_HOST: db
+      MYSQL_PORT: "3306"
+      MYSQL_USER: seatuser
+      MYSQL_PASSWORD: seatpass
+      MYSQL_DATABASE: seatbooking
+      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      AUTO_CREATE_TABLES: "true"
+      TZ: UTC
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./frontend/my-app
+      args:
+        # Reached from the browser, not from inside the compose network, so
+        # this must be a host-visible URL.
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  mysql_data:
