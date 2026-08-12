@@ -34,6 +34,25 @@ class ValidationError(AppError):
     code = "validation_error"
 
 
+class ConflictError(AppError):
+    status_code = status.HTTP_409_CONFLICT
+    code = "conflict"
+
+
+class AuthError(AppError):
+    """Bad or missing credentials -- 401."""
+
+    status_code = status.HTTP_401_UNAUTHORIZED
+    code = "unauthenticated"
+
+
+class PermissionError_(AppError):
+    """Authenticated, but not allowed to do this -- 403."""
+
+    status_code = status.HTTP_403_FORBIDDEN
+    code = "forbidden"
+
+
 class SeatUnavailableError(AppError):
     """At least one requested seat is already booked or blocked.
 
@@ -84,6 +103,8 @@ def register_error_handlers(app: FastAPI) -> None:
 
 def _code_for(status_code: int) -> str:
     return {
+        status.HTTP_401_UNAUTHORIZED: "unauthenticated",
+        status.HTTP_403_FORBIDDEN: "forbidden",
         status.HTTP_404_NOT_FOUND: "not_found",
         status.HTTP_409_CONFLICT: "conflict",
         status.HTTP_422_UNPROCESSABLE_CONTENT: "validation_error",

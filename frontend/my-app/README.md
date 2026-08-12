@@ -19,10 +19,10 @@ npm run dev                    # http://localhost:3000
 
 | Path | |
 |---|---|
-| `app/` | routes — `/`, `/events/[id]`, `/bookings`, `/admin` |
-| `components/` | `SeatMap` and shared UI primitives |
+| `app/` | routes — `/`, `/events/[id]`, `/bookings`, `/login`, `/account`, `/admin` |
+| `components/` | `SeatMap`, `AuthProvider`, `RequireAuth`, shared UI primitives |
 | `hooks/` | `usePolledResource`, `useSeatMap` |
-| `lib/api.ts` | typed API client and `ApiError` |
+| `lib/api.ts` | typed API client, token store, `ApiError` |
 | `DESIGN.md` | the design system this UI is styled to |
 
 Design tokens live as CSS custom properties in `app/globals.css` and are exposed

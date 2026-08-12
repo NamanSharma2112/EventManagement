@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import { useAuth } from "@/components/AuthProvider";
+
 import { SeatLegend, SeatMap } from "@/components/SeatMap";
 import {
   Alert,
@@ -31,10 +33,15 @@ type Feedback =
 
 export function EventBooking({ eventId }: { eventId: number }) {
   const { data: seatMap, loading, refreshing, error, refresh } = useSeatMap(eventId);
+  const { user } = useAuth();
 
   const [pickedIds, setPickedIds] = useState<number[]>([]);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  // Typed values win; otherwise the signed-in account fills the form. Derived
+  // rather than copied into state on login, so there is no effect to sync.
+  const [nameInput, setNameInput] = useState("");
+  const [emailInput, setEmailInput] = useState("");
+  const name = nameInput || user?.full_name || "";
+  const email = emailInput || user?.email || "";
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
 
@@ -99,8 +106,8 @@ export function EventBooking({ eventId }: { eventId: number }) {
       });
       setFeedback({ kind: "success", booking });
       setPickedIds([]);
-      setName("");
-      setEmail("");
+      setNameInput("");
+      setEmailInput("");
     } catch (err) {
       if (err instanceof ApiError && err.isConflict) {
         // Somebody won the race. Name the seats that clashed and pull a fresh
@@ -290,12 +297,30 @@ export function EventBooking({ eventId }: { eventId: number }) {
 
           <Card>
             <h2 className="display-sm text-ink">Your details</h2>
+            {user ? (
+              <p className="mt-1 text-sm text-muted">
+                Booking as{" "}
+                <span className="font-medium text-ink">{user.email}</span>. It
+                will appear under your account and only you can cancel it.
+              </p>
+            ) : (
+              <p className="mt-1 text-sm text-muted">
+                No account needed.{" "}
+                <Link
+                  href={`/login?next=${encodeURIComponent(`/events/${eventId}`)}`}
+                  className="text-ink underline underline-offset-4"
+                >
+                  Sign in
+                </Link>{" "}
+                to keep your bookings together.
+              </p>
+            )}
             <form onSubmit={submit} className="mt-3 space-y-3">
               <Field label="Name">
                 <input
                   className={inputClass}
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => setNameInput(e.target.value)}
                   placeholder="Ada Lovelace"
                   required
                   maxLength={120}
@@ -307,7 +332,7 @@ export function EventBooking({ eventId }: { eventId: number }) {
                   className={inputClass}
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => setEmailInput(e.target.value)}
                   placeholder="ada@example.com"
                   required
                   autoComplete="email"

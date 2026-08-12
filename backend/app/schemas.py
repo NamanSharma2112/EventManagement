@@ -6,7 +6,62 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
-from .models import BookingStatus, SeatStatus
+from .models import BookingStatus, SeatStatus, UserRole
+from .security import MAX_PASSWORD_BYTES
+
+# --------------------------------------------------------------------------- #
+# Auth
+# --------------------------------------------------------------------------- #
+
+
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    # Lower bound is a real guard; the upper bound is bcrypt's 72-byte limit,
+    # beyond which it silently ignores the rest of the password.
+    password: str = Field(min_length=8, max_length=MAX_PASSWORD_BYTES)
+    full_name: str = Field(min_length=1, max_length=120)
+
+    @field_validator("password")
+    @classmethod
+    def _fits_bcrypt(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > MAX_PASSWORD_BYTES:
+            raise ValueError(
+                f"Password must be at most {MAX_PASSWORD_BYTES} bytes when UTF-8 encoded"
+            )
+        return value
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=1)
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str = Field(min_length=1)
+
+
+class TokenPair(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int = Field(description="Access token lifetime in seconds")
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    email: str
+    full_name: str
+    role: UserRole
+    is_active: bool
+    created_at: datetime
+
+
+class AuthSession(BaseModel):
+    user: UserOut
+    tokens: TokenPair
+
 
 # --------------------------------------------------------------------------- #
 # Events
@@ -177,6 +232,9 @@ class BookingOut(BaseModel):
     reference: str
     event_id: int
     event_name: str
+    event_date: datetime | None = None
+    venue: str | None = None
+    user_id: int | None = None
     booker_name: str
     booker_email: str
     status: BookingStatus
@@ -194,6 +252,7 @@ class BookingOut(BaseModel):
 class AdminBookingRow(BaseModel):
     id: int
     reference: str
+    user_id: int | None = None
     booker_name: str
     booker_email: str
     status: BookingStatus

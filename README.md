@@ -24,14 +24,15 @@ docker-compose.yml
 ## Table of contents
 
 1. [Quick start](#quick-start)
-2. [Concurrency — how double-booking is prevented](#concurrency--how-double-booking-is-prevented)
-3. [Demonstrating the race](#demonstrating-the-race)
-4. [Schema design](#schema-design)
-5. [API](#api)
-6. [Frontend](#frontend)
-7. [Tests](#tests)
-8. [Deployment](#deployment)
-9. [Trade-offs and known limitations](#trade-offs-and-known-limitations)
+2. [Authentication](#authentication)
+3. [Concurrency — how double-booking is prevented](#concurrency--how-double-booking-is-prevented)
+4. [Demonstrating the race](#demonstrating-the-race)
+5. [Schema design](#schema-design)
+6. [API](#api)
+7. [Frontend](#frontend)
+8. [Tests](#tests)
+9. [Deployment](#deployment)
+10. [Trade-offs and known limitations](#trade-offs-and-known-limitations)
 
 ---
 
@@ -44,12 +45,14 @@ docker compose up --build
 ```
 
 That starts MySQL, applies `backend/schema.sql`, runs the API on `:8000` and the
-frontend on `:3000`. Open http://localhost:3000/admin and create an event, or
-seed demo data:
+frontend on `:3000`. Seed demo data and demo accounts:
 
 ```bash
 docker compose exec api python scripts/seed.py
 ```
+
+Then sign in at http://localhost:3000/login with `admin@seatbook.dev` /
+`admin12345` and open **Admin**. Browsing and booking need no account at all.
 
 ### Without Docker
 
@@ -93,6 +96,91 @@ npm install
 cp .env.example .env.local                           # NEXT_PUBLIC_API_BASE_URL
 npm run dev
 ```
+
+**Demo accounts** (created by `scripts/seed.py`, also shown on the sign-in page):
+
+| Role | Email | Password |
+|---|---|---|
+| Admin | `admin@seatbook.dev` | `admin12345` |
+| User | `user@seatbook.dev` | `user12345` |
+
+The admin account is also created on first API startup even without seeding, so
+a fresh install always has a way in. See [Authentication](#authentication).
+
+---
+
+## Authentication
+
+The brief does not require auth on either side. This adds it anyway, without
+breaking either requirement it states — booking still works with no account, and
+the admin gate can be switched off entirely.
+
+### What is and is not protected
+
+| Surface | Requirement |
+|---|---|
+| Browse events, fetch the seat map, look up a booking by reference | **Public** |
+| Create a booking | **Optional** — signed in or not |
+| Create/delete an event, block seats, admin dashboard | **Admin** |
+| Cancel a booking made while signed in | That account, or an admin |
+| Cancel a guest booking | The reference is the credential |
+
+Booking stays open because the brief says so explicitly ("No login/signup flow
+is required"). Signing in is a benefit rather than a toll: the booking is linked
+to the account, appears under `/account`, and can only be cancelled by its owner.
+
+`REQUIRE_ADMIN_AUTH=false` restores the brief's open admin exactly. It defaults
+to **true** because an unauthenticated `DELETE /api/events/{id}` is not
+something to ship.
+
+### How it works
+
+**Passwords** are bcrypt hashed with a per-hash salt. Anything over bcrypt's
+72-byte limit is rejected rather than silently truncated — otherwise two
+different long passwords could open the same account. A failed login costs the
+same work whether or not the account exists (a dummy hash is verified when it
+does not), so the endpoint cannot be used to enumerate addresses, and both cases
+return the identical message.
+
+**Two tokens, doing different jobs:**
+
+- **Access token** — a 30-minute JWT (HS256). Stateless, so authorising a
+  request never touches the database. It cannot be revoked before it expires,
+  which is exactly why it is short.
+- **Refresh token** — a 14-day opaque 256-bit random string. Only its SHA-256
+  hash is stored, so a database dump cannot be replayed as a session. It is
+  **rotated on every use**: refreshing revokes the token presented and issues a
+  new one.
+
+**Reuse detection.** If a token that was already spent by rotation is presented
+again, that is the signature of a stolen token — so every session for that
+account is revoked and both parties must sign in again. Crucially, a token
+revoked by an explicit *logout* does **not** trigger this: `revoked_reason`
+separates `ROTATED` from `LOGOUT`, so signing out on your laptop cannot sign you
+out on your phone. (That distinction was a real bug, caught by
+`test_logout_revokes_only_that_session`.)
+
+**Roles** are `USER` and `ADMIN`. `POST /api/auth/register` always creates a
+`USER` — role is not part of the request schema, so it cannot be self-assigned.
+
+### Token storage in the browser
+
+Tokens live in `localStorage`. The honest trade-off: that is readable by any
+script on the page, so an XSS bug leaks the session. `httpOnly` cookies would
+not be — but the API is a separate origin, which turns cookies into a
+`SameSite=None` + CSRF-token exercise. Given a 30-minute access token and a
+rotating, revocable refresh token, `localStorage` is the reasonable choice at
+this scale. Behind a shared domain or a same-origin proxy, cookies would be the
+better answer.
+
+The client refreshes automatically on a 401 and replays the original request.
+Concurrent 401s share one in-flight refresh — without that, two parallel
+rotations would look like a replay and log the user out of everything.
+
+The UI gate (`RequireAuth`) is a convenience, not a security boundary: it hides
+what you cannot use. The API re-checks the token and role on every admin
+request, so editing the component in devtools earns a rendered page and a wall
+of 403s.
 
 ---
 
@@ -338,30 +426,39 @@ unique key can be expressed on the `(event, seat)` pair as one index.
 
 Interactive docs at `/docs`; the OpenAPI schema at `/openapi.json`.
 
-| Method | Path | Purpose |
-|---|---|---|
-| `POST` | `/api/events` | Create an event and generate its seats → `201` |
-| `GET` | `/api/events` | List events with seat counts |
-| `GET` | `/api/events/{id}` | Event detail |
-| `GET` | `/api/events/{id}/seats` | **Seat map** with derived statuses |
-| `POST` | `/api/events/{id}/seats/block` | Block/unblock seats (admin) |
-| `GET` | `/api/events/{id}/summary` | **Admin dashboard**: totals + every booking |
-| `DELETE` | `/api/events/{id}` | Delete an event and everything under it |
-| `POST` | `/api/bookings` | **Book seats** → `201`, or `409` on conflict |
-| `GET` | `/api/bookings/{reference}` | Look up a booking |
-| `POST` | `/api/bookings/{reference}/cancel` | Cancel and release the seats |
-| `GET` | `/health` | Liveness + database check |
+| Method | Path | Purpose | Auth |
+|---|---|---|---|
+| `POST` | `/api/auth/register` | Create an account and sign in → `201` | — |
+| `POST` | `/api/auth/login` | Exchange email + password for tokens | — |
+| `POST` | `/api/auth/refresh` | Rotate a refresh token for a fresh pair | — |
+| `POST` | `/api/auth/logout` | Revoke one refresh token | — |
+| `POST` | `/api/auth/logout-all` | Revoke every session for the account | user |
+| `GET` | `/api/auth/me` | The signed-in account | user |
+| `GET` | `/api/auth/me/bookings` | Bookings made while signed in | user |
+| `POST` | `/api/events` | Create an event and generate its seats → `201` | admin |
+| `GET` | `/api/events` | List events with seat counts | — |
+| `GET` | `/api/events/{id}` | Event detail | — |
+| `GET` | `/api/events/{id}/seats` | **Seat map** with derived statuses | — |
+| `POST` | `/api/events/{id}/seats/block` | Block/unblock seats (admin) | admin |
+| `GET` | `/api/events/{id}/summary` | **Admin dashboard**: totals + every booking | admin |
+| `DELETE` | `/api/events/{id}` | Delete an event and everything under it | admin |
+| `POST` | `/api/bookings` | **Book seats** → `201`, or `409` on conflict | optional |
+| `GET` | `/api/bookings/{reference}` | Look up a booking | — |
+| `POST` | `/api/bookings/{reference}/cancel` | Cancel and release the seats | owner |
+| `GET` | `/health` | Liveness + database check | — |
 
 ### Status codes
 
 | Code | When |
 |---|---|
-| `201` | Event or booking created |
-| `200` | Read, block/unblock, cancel |
-| `204` | Event deleted |
+| `201` | Event, account or booking created |
+| `200` | Read, block/unblock, cancel, login, refresh |
+| `204` | Event deleted, logged out |
+| `401` | Missing, expired, forged or already-revoked credentials |
+| `403` | Signed in, but not allowed (not an admin; someone else's booking) |
 | `404` | Unknown event, seat, or booking reference |
-| `409` | **Seat already booked or blocked**, or booking already cancelled |
-| `422` | Invalid payload (bad email, empty seat list, layout over the caps) |
+| `409` | **Seat already booked or blocked**, email already registered, or booking already cancelled |
+| `422` | Invalid payload (bad email, weak password, empty seat list, layout over the caps) |
 
 Every 4xx uses one envelope — `detail`, a machine-readable `code`, and for seat
 conflicts a `conflicting_seats` array — so the UI can highlight exactly which
@@ -399,8 +496,10 @@ seats per event, 10 seats per booking) so a typo cannot ask for a million rows.
 | `/events/[id]` | Seat map, multi-seat selection, booking form |
 | `/bookings` | Look up a booking by reference |
 | `/bookings/[reference]` | Confirmation; cancel a booking |
-| `/admin` | Event list + create-event form |
-| `/admin/events/[id]` | Dashboard: totals, revenue, seat blocking, booking table |
+| `/login`, `/register` | Sign in / create an account |
+| `/account` | Your bookings, totals, sign out |
+| `/admin` | Event list + create-event form (admin only) |
+| `/admin/events/[id]` | Dashboard: totals, revenue, seat blocking, booking table (admin only) |
 
 **Design system.** The UI follows
 [`frontend/my-app/DESIGN.md`](frontend/my-app/DESIGN.md) — an Airbnb-derived
@@ -448,7 +547,7 @@ every one — in both light and dark.
 ```bash
 cd backend
 pip install -r requirements-dev.txt
-pytest                    # 32 tests
+pytest                    # 61 tests
 pytest tests/test_concurrency.py -v
 ```
 
@@ -471,8 +570,25 @@ by a `threading.Barrier`:
 | `test_booking_transaction_takes_a_row_lock_on_the_seat` | a second connection using `FOR UPDATE NOWAIT` is refused while the lock is held |
 
 Plus `test_events.py` (layout generation, row labels past Z, tier validation,
-blocking, count consistency across all three endpoints) and `test_bookings.py`
-(happy path, 409s, atomicity, validation, cancellation).
+blocking, count consistency across all three endpoints), `test_bookings.py`
+(happy path, 409s, atomicity, validation, cancellation), and `test_auth.py`:
+
+| Test | What it proves |
+|---|---|
+| `test_password_hashes_are_salted_and_verifiable` | same password, different hashes; plaintext never present |
+| `test_password_longer_than_bcrypts_limit_is_rejected` | no silent 72-byte truncation |
+| `test_registration_cannot_self_assign_admin` | a `role` in the body is ignored |
+| `test_login_does_not_leak_whether_an_account_exists` | identical status and message either way |
+| `test_a_token_signed_with_another_secret_is_rejected` | forged JWTs get 401 |
+| `test_refresh_token_rotates_and_the_old_one_stops_working` | rotation actually rotates |
+| `test_replaying_a_used_refresh_token_kills_every_session` | reuse detection revokes the family |
+| `test_logout_revokes_only_that_session` | logout does **not** sign you out elsewhere |
+| `test_refresh_tokens_are_only_stored_hashed` | a database dump cannot be replayed |
+| `test_admin_routes_reject_anonymous_and_plain_users` | 401 with no token, 403 as a `USER` |
+| `test_public_reads_stay_public` | browsing and the seat map need no token |
+| `test_booking_without_signing_in_still_works` | the brief's guest booking is intact |
+| `test_a_stranger_cannot_cancel_an_account_booking` | knowing a reference is not enough |
+| `test_an_invalid_token_is_an_error_even_where_auth_is_optional` | a bad token is never downgraded to "guest" |
 
 Frontend checks:
 
@@ -502,13 +618,19 @@ client bundle at build time, so changing it requires a redeploy.
 | `DATABASE_URL` | or the `MYSQL_*` parts individually |
 | `CORS_ORIGINS` | must include the deployed frontend origin, comma separated |
 | `AUTO_CREATE_TABLES` | `false` in production; run `schema.sql` once instead |
+| `JWT_SECRET` | **required** — anyone who knows it can mint an admin token. `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
+| `REQUIRE_ADMIN_AUTH` | `true`; set `false` only for a deliberately open demo |
+| `BOOTSTRAP_ADMIN_PASSWORD` | change it, or set `CREATE_BOOTSTRAP_ADMIN=false` |
 | `TZ` | `UTC`, and run MySQL with `--default-time-zone=+00:00` |
 
 **Database → any managed MySQL 8** (PlanetScale, RDS, Railway). Apply
 `backend/schema.sql` once.
 
-Two things to get right:
+Three things to get right:
 
+- **`JWT_SECRET`.** The default is a published dev value; startup logs a warning
+  while it is still in place. Rotating it invalidates every access token, which
+  is the point.
 - **CORS.** The seat map is fetched from the browser, so the API must list the
   frontend's exact origin in `CORS_ORIGINS` — scheme and port included.
 - **Timestamps.** `created_at` uses MySQL's `NOW()` and `cancelled_at` uses the
@@ -525,9 +647,12 @@ real ticketing system would put a short TTL hold on selection. The schema is
 ready for it: a `holds` table with an expiry, or a `held_until` column on
 `booking_seats` with the unique index widened to cover held rows.
 
-**No authentication anywhere.** The brief says admin needs none, and `/admin` is
-open by design. It should not be, in production — the block and delete endpoints
-would let anyone sabotage an event.
+**Auth gaps.** There is no password reset, no email verification, no
+rate limiting on login, and no account-management UI (deactivating an account is
+a database update). Admin accounts can only be promoted by changing `role` in the
+database or via the seeded bootstrap admin — there is no "invite an admin" flow.
+The bootstrap admin ships with a published password, which is fine for a demo
+and wrong for anything else; change it, or set `CREATE_BOOTSTRAP_ADMIN=false`.
 
 **Polling, not push.** A 5-second poll per open seat map is fine for a demo and
 matches the brief. At real concurrency it is wasteful; server-sent events or a
@@ -551,5 +676,7 @@ seats never block each other, which is what you want — but a single very popul
 seat is a serialisation point by construction. That is inherent to the
 guarantee, not a defect.
 
-**No rate limiting.** The booking endpoint will happily accept as many requests
-as it is given; the concurrency demo is proof of that.
+**No rate limiting anywhere.** The booking endpoint will happily accept as many
+requests as it is given — the concurrency demo is proof of that — and so will
+`/api/auth/login`, which makes online password guessing cheap. A real deployment
+wants a limiter in front of both.

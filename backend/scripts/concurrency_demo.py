@@ -31,11 +31,14 @@ from threading import Barrier
 DEFAULT_BASE_URL = "http://127.0.0.1:8000"
 
 
-def request(method: str, url: str, payload: dict | None = None) -> tuple[int, dict]:
+def request(
+    method: str, url: str, payload: dict | None = None, token: str | None = None
+) -> tuple[int, dict]:
     data = json.dumps(payload).encode() if payload is not None else None
-    req = urllib.request.Request(
-        url, data=data, method=method, headers={"Content-Type": "application/json"}
-    )
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(url, data=data, method=method, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=30) as response:
             body = response.read().decode()
@@ -45,7 +48,25 @@ def request(method: str, url: str, payload: dict | None = None) -> tuple[int, di
         return exc.code, json.loads(body) if body else {}
 
 
-def create_demo_event(base_url: str, columns: int) -> dict:
+def admin_token(base_url: str, email: str, password: str) -> str | None:
+    """Sign in as an admin. Creating the demo event needs it; racing does not.
+
+    Returns None when admin auth is switched off, in which case the token is
+    simply not sent.
+    """
+    status, body = request(
+        "POST", f"{base_url}/api/auth/login", {"email": email, "password": password}
+    )
+    if status != 200:
+        sys.exit(
+            f"Could not sign in as {email} ({status}): {body}\n"
+            "Seed the demo admin with `python scripts/seed.py`, or pass "
+            "--admin-email/--admin-password."
+        )
+    return body["tokens"]["access_token"]
+
+
+def create_demo_event(base_url: str, columns: int, token: str | None) -> dict:
     status, event = request(
         "POST",
         f"{base_url}/api/events",
@@ -59,6 +80,7 @@ def create_demo_event(base_url: str, columns: int) -> dict:
             "columns": columns,
             "default_price_cents": 25000,
         },
+        token=token,
     )
     if status != 201:
         sys.exit(f"Could not create the demo event ({status}): {event}")
@@ -79,6 +101,8 @@ def main() -> int:
         type=int,
         help="race against an existing event instead of creating one",
     )
+    parser.add_argument("--admin-email", default="admin@seatbook.dev")
+    parser.add_argument("--admin-password", default="admin12345")
     args = parser.parse_args()
 
     status, _ = request("GET", f"{args.base_url}/health")
@@ -88,7 +112,10 @@ def main() -> int:
     if args.event_id:
         event_id = args.event_id
     else:
-        event_id = create_demo_event(args.base_url, max(args.seats, 1))["id"]
+        # Only the setup needs admin. The racing requests below are deliberately
+        # anonymous guest bookings -- the guarantee has nothing to do with auth.
+        token = admin_token(args.base_url, args.admin_email, args.admin_password)
+        event_id = create_demo_event(args.base_url, max(args.seats, 1), token)["id"]
 
     _, seat_map = request("GET", f"{args.base_url}/api/events/{event_id}/seats")
     available = [

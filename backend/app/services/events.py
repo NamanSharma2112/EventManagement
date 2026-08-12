@@ -401,6 +401,7 @@ def admin_summary(db: Session, event_id: int) -> AdminSummaryOut:
             AdminBookingRow(
                 id=booking.id,
                 reference=booking.reference,
+                user_id=booking.user_id,
                 booker_name=booking.booker_name,
                 booker_email=booking.booker_email,
                 status=booking.status,
