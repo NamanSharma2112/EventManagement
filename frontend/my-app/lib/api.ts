@@ -12,6 +12,28 @@ export const API_BASE_URL = (
 
 export type SeatStatus = "AVAILABLE" | "BOOKED" | "BLOCKED";
 export type BookingStatus = "CONFIRMED" | "CANCELLED";
+export type UserRole = "USER" | "ADMIN";
+
+export interface User {
+  id: number;
+  email: string;
+  full_name: string;
+  role: UserRole;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface TokenPair {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  expires_in: number;
+}
+
+export interface AuthSession {
+  user: User;
+  tokens: TokenPair;
+}
 
 export interface Section {
   id: number;
@@ -88,6 +110,9 @@ export interface Booking {
   reference: string;
   event_id: number;
   event_name: string;
+  event_date: string | null;
+  venue: string | null;
+  user_id: number | null;
   booker_name: string;
   booker_email: string;
   status: BookingStatus;
@@ -100,6 +125,7 @@ export interface Booking {
 export interface AdminBookingRow {
   id: number;
   reference: string;
+  user_id: number | null;
   booker_name: string;
   booker_email: string;
   status: BookingStatus;
@@ -153,17 +179,119 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+// --- Token storage --------------------------------------------------------
+//
+// Tokens live in localStorage. The honest trade-off: this is readable by any
+// script on the page, so an XSS bug leaks the session. httpOnly cookies would
+// not be, but the API is a separate origin, which turns cookies into a
+// SameSite=None + CSRF-token exercise. Given a short-lived access token and a
+// rotating, revocable refresh token, localStorage is the reasonable choice at
+// this scale -- see the README for what would change in production.
+
+const ACCESS_KEY = "seatbook.access_token";
+const REFRESH_KEY = "seatbook.refresh_token";
+
+type AuthListener = () => void;
+const listeners = new Set<AuthListener>();
+
+export function onAuthChange(listener: AuthListener): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+function notifyAuthChange() {
+  listeners.forEach((listener) => listener());
+}
+
+export function getAccessToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(ACCESS_KEY);
+}
+
+function getRefreshToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(REFRESH_KEY);
+}
+
+export function storeTokens(tokens: TokenPair) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(ACCESS_KEY, tokens.access_token);
+  window.localStorage.setItem(REFRESH_KEY, tokens.refresh_token);
+  notifyAuthChange();
+}
+
+export function clearTokens() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(ACCESS_KEY);
+  window.localStorage.removeItem(REFRESH_KEY);
+  notifyAuthChange();
+}
+
+/**
+ * Refresh, de-duplicated.
+ *
+ * Several requests can 401 at once when an access token expires. Without this
+ * shared promise each one would refresh separately, and because the backend
+ * rotates refresh tokens, the second rotation would look like a replay and log
+ * the user out of everything.
+ */
+let refreshInFlight: Promise<boolean> | null = null;
+
+async function refreshAccessToken(): Promise<boolean> {
+  if (refreshInFlight) return refreshInFlight;
+
+  refreshInFlight = (async () => {
+    const refresh_token = getRefreshToken();
+    if (!refresh_token) return false;
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+        method: "POST",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token }),
+      });
+      if (!response.ok) {
+        clearTokens();
+        return false;
+      }
+      const session = (await response.json()) as AuthSession;
+      storeTokens(session.tokens);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+
+  return refreshInFlight;
+}
+
+interface RequestOptions extends RequestInit {
+  /** Send the bearer token. Defaults to true; false for login/register. */
+  auth?: boolean;
+  /** Internal: stops a refreshed retry from looping. */
+  _retried?: boolean;
+}
+
+async function request<T>(path: string, init: RequestOptions = {}): Promise<T> {
+  const { auth = true, _retried = false, ...rest } = init;
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...((rest.headers as Record<string, string>) ?? {}),
+  };
+
+  const token = auth ? getAccessToken() : null;
+  if (token) headers.Authorization = `Bearer ${token}`;
+
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
-      ...init,
+      ...rest,
       // Always hit the network: a cached seat map is a wrong seat map.
       cache: "no-store",
-      headers: {
-        "Content-Type": "application/json",
-        ...(init?.headers ?? {}),
-      },
+      headers,
     });
   } catch {
     throw new ApiError(
@@ -171,6 +299,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       0,
       "network_error",
     );
+  }
+
+  // An expired access token: refresh once, then replay the original request.
+  if (response.status === 401 && auth && token && !_retried) {
+    if (await refreshAccessToken()) {
+      return request<T>(path, { ...init, _retried: true });
+    }
+    clearTokens();
   }
 
   if (response.status === 204) {
@@ -243,6 +379,51 @@ export const setSeatsBlocked = (eventId: number, input: BlockSeatsInput) =>
     `/api/events/${eventId}/seats/block`,
     { method: "POST", body: JSON.stringify(input) },
   );
+
+// --- Auth -----------------------------------------------------------------
+
+export const registerAccount = (input: {
+  email: string;
+  password: string;
+  full_name: string;
+}) =>
+  request<AuthSession>("/api/auth/register", {
+    method: "POST",
+    body: JSON.stringify(input),
+    auth: false,
+  });
+
+export const login = (input: { email: string; password: string }) =>
+  request<AuthSession>("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify(input),
+    auth: false,
+  });
+
+export const getMe = () => request<User>("/api/auth/me");
+
+export const getMyBookings = () => request<Booking[]>("/api/auth/me/bookings");
+
+/** Revoke the refresh token server-side, then drop both tokens locally. */
+export async function logout(): Promise<void> {
+  const refresh_token =
+    typeof window === "undefined"
+      ? null
+      : window.localStorage.getItem("seatbook.refresh_token");
+  try {
+    if (refresh_token) {
+      await request<void>("/api/auth/logout", {
+        method: "POST",
+        body: JSON.stringify({ refresh_token }),
+        auth: false,
+      });
+    }
+  } catch {
+    // A failed revoke must not strand the user in a signed-in-looking UI.
+  } finally {
+    clearTokens();
+  }
+}
 
 // --- Bookings -------------------------------------------------------------
 

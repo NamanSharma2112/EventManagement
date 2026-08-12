@@ -7,6 +7,7 @@
 --   mysql -u root -p < schema.sql
 --
 -- Tables, in dependency order:
+--   users          -> refresh_tokens
 --   events         -> sections -> seats
 --                  -> bookings -> booking_seats
 --
@@ -16,6 +17,56 @@
 CREATE DATABASE IF NOT EXISTS seatbooking
   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE seatbooking;
+
+
+-- ---------------------------------------------------------------------------
+-- users -- accounts. Only the bcrypt hash of a password is ever stored.
+--
+-- Emails are lower-cased by the application before writing, so this plain
+-- unique index makes accounts case-insensitive.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS users (
+  id            BIGINT       NOT NULL AUTO_INCREMENT,
+  email         VARCHAR(255) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,   -- bcrypt, never a plaintext password
+  full_name     VARCHAR(120) NOT NULL,
+  role          ENUM('USER','ADMIN') NOT NULL DEFAULT 'USER',
+  is_active     TINYINT(1)   NOT NULL DEFAULT 1,
+  created_at    DATETIME     NOT NULL DEFAULT (NOW()),
+  updated_at    DATETIME     NOT NULL DEFAULT (NOW()) ON UPDATE NOW(),
+
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_users_email (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- ---------------------------------------------------------------------------
+-- refresh_tokens -- the revocable half of a session
+--
+-- Only the SHA-256 *hash* of the token is stored, so a database leak cannot be
+-- replayed as a login. Tokens rotate on every refresh: the presented one is
+-- marked ROTATED and a new one issued.
+--
+-- revoked_reason is what separates a leak from a logout. Replaying a token that
+-- was revoked by ROTATION means someone is using a token the real owner already
+-- spent -- so every session for that account is dropped. Replaying one revoked
+-- by LOGOUT is just a stale client and must not sign the user out elsewhere.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+  id             BIGINT      NOT NULL AUTO_INCREMENT,
+  user_id        BIGINT      NOT NULL,
+  token_hash     VARCHAR(64) NOT NULL,   -- sha256 hex of the opaque token
+  expires_at     DATETIME    NOT NULL,
+  revoked_at     DATETIME    NULL,
+  revoked_reason ENUM('ROTATED','LOGOUT','REUSE_DETECTED') NULL,
+  created_at     DATETIME    NOT NULL DEFAULT (NOW()),
+
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_refresh_tokens_hash (token_hash),
+  KEY ix_refresh_tokens_user (user_id),
+  CONSTRAINT fk_refresh_tokens_user FOREIGN KEY (user_id)
+    REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
 -- ---------------------------------------------------------------------------
@@ -100,10 +151,15 @@ CREATE TABLE IF NOT EXISTS seats (
 -- ---------------------------------------------------------------------------
 -- bookings -- one row per successful booking request (the booker's details)
 -- ---------------------------------------------------------------------------
+-- user_id is NULL for guest bookings. The brief requires booking without a
+-- login, so an account is an optional owner rather than a requirement: a signed
+-- in booking gains "my bookings" and an ownership check on cancellation, while
+-- a guest booking is reachable only by its reference.
 CREATE TABLE IF NOT EXISTS bookings (
   id                 BIGINT       NOT NULL AUTO_INCREMENT,
   event_id           BIGINT       NOT NULL,
   reference          VARCHAR(16)  NOT NULL,   -- 'BK-XXXXXXXX', shown to the booker
+  user_id            BIGINT       NULL,       -- NULL = guest booking
   booker_name        VARCHAR(120) NOT NULL,
   booker_email       VARCHAR(255) NOT NULL,
   status             ENUM('CONFIRMED','CANCELLED') NOT NULL DEFAULT 'CONFIRMED',
@@ -115,8 +171,13 @@ CREATE TABLE IF NOT EXISTS bookings (
   UNIQUE KEY uq_bookings_reference (reference),
   KEY ix_bookings_event_created (event_id, created_at),
   KEY ix_bookings_email (booker_email),
+  KEY ix_bookings_user_created (user_id, created_at),
   CONSTRAINT fk_bookings_event FOREIGN KEY (event_id)
-    REFERENCES events (id) ON DELETE CASCADE
+    REFERENCES events (id) ON DELETE CASCADE,
+  -- SET NULL, not CASCADE: deleting an account must not erase the fact that a
+  -- seat was sold. The booking survives as a guest booking.
+  CONSTRAINT fk_bookings_user FOREIGN KEY (user_id)
+    REFERENCES users (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 

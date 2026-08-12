@@ -17,10 +17,11 @@ from ..config import settings
 from ..errors import (
     BookingStateError,
     NotFoundError,
+    PermissionError_,
     SeatUnavailableError,
     ValidationError,
 )
-from ..models import Booking, BookingSeat, BookingStatus, Event, Seat, Section
+from ..models import Booking, BookingSeat, BookingStatus, Event, Seat, Section, User
 from ..schemas import BookedSeatOut, BookingCreate, BookingOut
 
 logger = logging.getLogger("app.bookings")
@@ -32,8 +33,15 @@ def _new_reference() -> str:
     return "BK-" + "".join(secrets.choice(_REFERENCE_ALPHABET) for _ in range(8))
 
 
-def create_booking(db: Session, payload: BookingCreate) -> Booking:
+def create_booking(
+    db: Session, payload: BookingCreate, user: User | None = None
+) -> Booking:
     """Book one or more seats, atomically.
+
+    ``user`` is optional on purpose: the brief requires booking without a login,
+    so a guest request is fully valid and simply produces a booking with no
+    owner. When an account *is* signed in the booking is linked to it, which is
+    what powers "my bookings" and the ownership check on cancellation.
 
     Concurrency, in the order the safeguards apply:
 
@@ -139,6 +147,7 @@ def create_booking(db: Session, payload: BookingCreate) -> Booking:
         booking = Booking(
             event_id=event.id,
             reference=_new_reference(),
+            user_id=user.id if user is not None else None,
             booker_name=payload.booker_name.strip(),
             booker_email=str(payload.booker_email).strip().lower(),
             status=BookingStatus.CONFIRMED,
@@ -178,14 +187,22 @@ def create_booking(db: Session, payload: BookingCreate) -> Booking:
     return booking
 
 
-def cancel_booking(db: Session, reference: str) -> Booking:
+def cancel_booking(
+    db: Session, reference: str, user: User | None = None
+) -> Booking:
     """Cancel a booking and release its seats.
 
     Deactivating the ``booking_seats`` rows drops them out of the partial unique
     index, which is what makes the seats bookable again while keeping the
     cancelled booking on record for the admin dashboard.
+
+    Ownership: a booking made while signed in can only be cancelled by that
+    account or by an admin -- otherwise knowing a reference would be enough to
+    cancel a stranger's seats. Guest bookings have no owner to check against,
+    so the reference remains the only credential they have.
     """
     booking = _load_booking(db, reference)
+    _assert_may_cancel(booking, user)
     if booking.status == BookingStatus.CANCELLED:
         raise BookingStateError(f"Booking {reference} is already cancelled.")
 
@@ -207,6 +224,18 @@ def cancel_booking(db: Session, reference: str) -> Booking:
 
 def get_booking(db: Session, reference: str) -> Booking:
     return _load_booking(db, reference)
+
+
+def _assert_may_cancel(booking: Booking, user: User | None) -> None:
+    if booking.user_id is None:
+        return  # guest booking: the reference is the credential
+    if user is None:
+        raise PermissionError_(
+            "This booking belongs to an account. Sign in to cancel it."
+        )
+    if user.is_admin or user.id == booking.user_id:
+        return
+    raise PermissionError_("This booking belongs to someone else.")
 
 
 def _load_booking(db: Session, reference: str) -> Booking:
@@ -232,12 +261,15 @@ def to_booking_out(db: Session, booking: Booking) -> BookingOut:
         .order_by(Seat.row_index.asc(), Seat.seat_number.asc())
     ).all()
 
-    event_name = booking.event.name if booking.event else ""
+    event = booking.event
     return BookingOut(
         id=booking.id,
         reference=booking.reference,
         event_id=booking.event_id,
-        event_name=event_name,
+        event_name=event.name if event else "",
+        event_date=event.event_date if event else None,
+        venue=event.venue if event else None,
+        user_id=booking.user_id,
         booker_name=booking.booker_name,
         booker_email=booking.booker_email,
         status=booking.status,

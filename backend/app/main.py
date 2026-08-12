@@ -13,10 +13,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from .config import settings
+from .config import Settings, settings
 from .database import Base, engine
 from .errors import register_error_handlers
-from .routers import bookings, events
+from .routers import auth, bookings, events
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,12 +27,29 @@ logger = logging.getLogger("app")
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    if settings.jwt_secret == Settings.model_fields["jwt_secret"].default and not settings.debug:
+        # Anyone who knows the default can mint an admin token.
+        logger.warning(
+            "JWT_SECRET is still the built-in default. Set JWT_SECRET before "
+            "exposing this API to anything but localhost."
+        )
+
     if settings.auto_create_tables:
         # Import so every model is registered on Base.metadata before create_all.
         from . import models  # noqa: F401
 
         Base.metadata.create_all(bind=engine)
         logger.info("Schema ensured on %s", engine.url.render_as_string(hide_password=True))
+
+        from .database import SessionLocal
+        from .services.auth import ensure_bootstrap_admin
+
+        session = SessionLocal()
+        try:
+            ensure_bootstrap_admin(session)
+        finally:
+            session.close()
+
     yield
     engine.dispose()
 
@@ -42,6 +59,11 @@ app = FastAPI(
     version="1.0.0",
     description=(
         "Seat booking for events, with double-booking prevented in the database.\n\n"
+        "**Auth.** `POST /api/auth/login` returns a short-lived access token (JWT) "
+        "and a rotating refresh token; send the access token as "
+        "`Authorization: Bearer <token>`. Booking does **not** require signing in "
+        "-- a guest booking simply has no owner. Admin endpoints do, unless "
+        "`REQUIRE_ADMIN_AUTH=false`.\n\n"
         "A booking is written inside a single transaction that locks the requested "
         "`seats` rows with `SELECT ... FOR UPDATE`, re-checks availability, and then "
         "inserts into `booking_seats` -- where a unique index on the active "
@@ -61,6 +83,7 @@ app.add_middleware(
 )
 
 register_error_handlers(app)
+app.include_router(auth.router)
 app.include_router(events.router)
 app.include_router(bookings.router)
 

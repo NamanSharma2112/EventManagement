@@ -52,7 +52,7 @@ def test_booked_seat_is_rejected_with_409(client, created_event):
     ]
 
 
-def test_multi_seat_booking_is_all_or_nothing(client, created_event):
+def test_multi_seat_booking_is_all_or_nothing(client, admin_client, created_event):
     """One taken seat must fail the whole request -- no partial booking."""
     event_id = created_event["id"]
     seats = seat_ids_by_label(client, event_id)
@@ -75,14 +75,14 @@ def test_multi_seat_booking_is_all_or_nothing(client, created_event):
     assert statuses["B3"] == "AVAILABLE"
     assert seat_map["booked_seats"] == 1
 
-    summary = client.get(f"/api/events/{event_id}/summary").json()
+    summary = admin_client.get(f"/api/events/{event_id}/summary").json()
     assert summary["total_bookings"] == 1
 
 
-def test_blocked_seat_cannot_be_booked(client, created_event):
+def test_blocked_seat_cannot_be_booked(client, admin_client, created_event):
     event_id = created_event["id"]
     seats = seat_ids_by_label(client, event_id)
-    client.post(
+    admin_client.post(
         f"/api/events/{event_id}/seats/block",
         json={"seat_ids": [seats["C1"]], "blocked": True, "reason": "Out of service"},
     )
@@ -96,8 +96,8 @@ def test_blocked_seat_cannot_be_booked(client, created_event):
     assert statuses["C2"] == "AVAILABLE"
 
 
-def test_seat_from_another_event_is_rejected(client, created_event, event_payload):
-    other = client.post("/api/events", json={**event_payload, "name": "Other"}).json()
+def test_seat_from_another_event_is_rejected(client, admin_client, created_event, event_payload):
+    other = admin_client.post("/api/events", json={**event_payload, "name": "Other"}).json()
     other_seats = seat_ids_by_label(client, other["id"])
 
     response = _book(client, created_event["id"], [other_seats["A1"]])
@@ -148,7 +148,7 @@ def test_booking_can_be_looked_up_by_reference(client, created_event):
     assert client.get("/api/bookings/BK-NOPE").status_code == 404
 
 
-def test_cancelling_a_booking_releases_its_seats(client, created_event):
+def test_cancelling_a_booking_releases_its_seats(client, admin_client, created_event):
     """Cancelled rows drop out of the unique index, so the seats come back."""
     event_id = created_event["id"]
     seats = seat_ids_by_label(client, event_id)
@@ -169,7 +169,7 @@ def test_cancelling_a_booking_releases_its_seats(client, created_event):
     # And the freed seat really can be booked again.
     assert _book(client, event_id, [seats["A1"]], email="new@example.com").status_code == 201
 
-    summary = client.get(f"/api/events/{event_id}/summary").json()
+    summary = admin_client.get(f"/api/events/{event_id}/summary").json()
     assert summary["cancelled_bookings"] == 1
     assert summary["total_bookings"] == 1
     assert summary["revenue_cents"] == 50000  # cancelled booking excluded

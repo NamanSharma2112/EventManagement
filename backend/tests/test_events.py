@@ -21,7 +21,7 @@ def test_create_event_materialises_every_seat(client, created_event):
     ]
 
 
-def test_create_event_with_price_tiers_and_blocked_seats(client, event_payload):
+def test_create_event_with_price_tiers_and_blocked_seats(client, admin_client, event_payload):
     payload = {
         **event_payload,
         "rows": 3,
@@ -32,7 +32,7 @@ def test_create_event_with_price_tiers_and_blocked_seats(client, event_payload):
         ],
         "blocked_seats": ["A1", "C4"],
     }
-    event = client.post("/api/events", json=payload).json()
+    event = admin_client.post("/api/events", json=payload).json()
 
     seat_map = client.get(f"/api/events/{event['id']}/seats").json()
     seats = {s["label"]: s for row in seat_map["rows"] for s in row["seats"]}
@@ -48,8 +48,8 @@ def test_create_event_with_price_tiers_and_blocked_seats(client, event_payload):
     assert seat_map["available_seats"] == 10
 
 
-def test_section_row_counts_must_cover_the_layout(client, event_payload):
-    response = client.post(
+def test_section_row_counts_must_cover_the_layout(client, admin_client, event_payload):
+    response = admin_client.post(
         "/api/events",
         json={
             **event_payload,
@@ -62,13 +62,13 @@ def test_section_row_counts_must_cover_the_layout(client, event_payload):
     assert "5 rows" in response.json()["detail"]
 
 
-def test_layout_size_is_capped(client, event_payload):
-    response = client.post("/api/events", json={**event_payload, "rows": 500})
+def test_layout_size_is_capped(client, admin_client, event_payload):
+    response = admin_client.post("/api/events", json={**event_payload, "rows": 500})
     assert response.status_code == 422
 
 
-def test_row_labels_continue_past_z(client, event_payload):
-    event = client.post(
+def test_row_labels_continue_past_z(client, admin_client, event_payload):
+    event = admin_client.post(
         "/api/events", json={**event_payload, "rows": 28, "columns": 1}
     ).json()
     labels = [
@@ -83,11 +83,11 @@ def test_unknown_event_is_404(client):
     assert response.json()["code"] == "not_found"
 
 
-def test_block_and_unblock_seats(client, created_event):
+def test_block_and_unblock_seats(client, admin_client, created_event):
     event_id = created_event["id"]
     seats = seat_ids_by_label(client, event_id)
 
-    response = client.post(
+    response = admin_client.post(
         f"/api/events/{event_id}/seats/block",
         json={"seat_labels": ["A1", "A2"], "blocked": True, "reason": "VIP hold"},
     )
@@ -101,7 +101,7 @@ def test_block_and_unblock_seats(client, created_event):
     assert blocked["A1"]["status"] == "BLOCKED"
     assert blocked["A1"]["blocked_reason"] == "VIP hold"
 
-    client.post(
+    admin_client.post(
         f"/api/events/{event_id}/seats/block",
         json={"seat_ids": [seats["A1"]], "blocked": False},
     )
@@ -111,7 +111,7 @@ def test_block_and_unblock_seats(client, created_event):
     assert after["A2"]["status"] == "BLOCKED"
 
 
-def test_blocking_skips_seats_that_are_already_booked(client, created_event):
+def test_blocking_skips_seats_that_are_already_booked(client, admin_client, created_event):
     event_id = created_event["id"]
     seats = seat_ids_by_label(client, event_id)
 
@@ -125,7 +125,7 @@ def test_blocking_skips_seats_that_are_already_booked(client, created_event):
         },
     )
 
-    response = client.post(
+    response = admin_client.post(
         f"/api/events/{event_id}/seats/block",
         json={"seat_labels": ["B1", "B2"], "blocked": True},
     )
@@ -134,11 +134,11 @@ def test_blocking_skips_seats_that_are_already_booked(client, created_event):
     assert body["skipped_booked_seat_ids"] == [seats["B1"]]
 
 
-def test_event_list_and_summary_agree_with_the_seat_map(client, created_event):
+def test_event_list_and_summary_agree_with_the_seat_map(client, admin_client, created_event):
     event_id = created_event["id"]
     seats = seat_ids_by_label(client, event_id)
 
-    client.post(
+    admin_client.post(
         f"/api/events/{event_id}/seats/block",
         json={"seat_labels": ["D5", "D6"], "blocked": True},
     )
@@ -154,7 +154,7 @@ def test_event_list_and_summary_agree_with_the_seat_map(client, created_event):
 
     keys = ("total_seats", "booked_seats", "blocked_seats", "available_seats")
     seat_map = client.get(f"/api/events/{event_id}/seats").json()
-    summary = client.get(f"/api/events/{event_id}/summary").json()
+    summary = admin_client.get(f"/api/events/{event_id}/summary").json()
     listed = next(e for e in client.get("/api/events").json() if e["id"] == event_id)
 
     expected = {
@@ -168,7 +168,7 @@ def test_event_list_and_summary_agree_with_the_seat_map(client, created_event):
     assert {k: listed[k] for k in keys} == expected
 
 
-def test_admin_summary_lists_bookings_with_revenue(client, created_event):
+def test_admin_summary_lists_bookings_with_revenue(client, admin_client, created_event):
     event_id = created_event["id"]
     seats = seat_ids_by_label(client, event_id)
 
@@ -182,7 +182,7 @@ def test_admin_summary_lists_bookings_with_revenue(client, created_event):
         },
     )
 
-    summary = client.get(f"/api/events/{event_id}/summary").json()
+    summary = admin_client.get(f"/api/events/{event_id}/summary").json()
     assert summary["total_bookings"] == 1
     assert summary["cancelled_bookings"] == 0
     assert summary["revenue_cents"] == 100000
@@ -197,7 +197,7 @@ def test_admin_summary_lists_bookings_with_revenue(client, created_event):
     )
 
 
-def test_delete_event_removes_its_seats_and_bookings(client, created_event):
+def test_delete_event_removes_its_seats_and_bookings(client, admin_client, created_event):
     event_id = created_event["id"]
     seats = seat_ids_by_label(client, event_id)
     client.post(
@@ -210,5 +210,5 @@ def test_delete_event_removes_its_seats_and_bookings(client, created_event):
         },
     )
 
-    assert client.delete(f"/api/events/{event_id}").status_code == 204
+    assert admin_client.delete(f"/api/events/{event_id}").status_code == 204
     assert client.get(f"/api/events/{event_id}").status_code == 404

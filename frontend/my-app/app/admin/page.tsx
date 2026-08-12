@@ -4,11 +4,20 @@ import Link from "next/link";
 import { useCallback } from "react";
 
 import { CreateEventForm } from "./CreateEventForm";
+import { RequireAuth } from "@/components/RequireAuth";
 import { usePolledResource } from "@/hooks/usePolledResource";
 import { Alert, Card, Spinner, StatTile } from "@/components/ui";
 import { formatEventDate, listEvents } from "@/lib/api";
 
 export default function AdminPage() {
+  return (
+    <RequireAuth adminOnly redirectTo="/admin">
+      <AdminContent />
+    </RequireAuth>
+  );
+}
+
+function AdminContent() {
   const fetcher = useCallback(() => listEvents(), []);
   const { data: events, loading, error, refresh } = usePolledResource(fetcher, {
     fallbackMessage: "Could not load events.",
@@ -28,8 +37,8 @@ export default function AdminPage() {
         <h1 className="display-xl text-ink">Admin</h1>
         <p className="mt-1 text-sm text-muted">
           Create events and their seat layouts, then open an event to block
-          seats and watch bookings come in. No sign-in - this route is open by
-          design for the demo.
+          seats and watch bookings come in. Every write here is checked against
+          an admin token on the API, not just hidden in the UI.
         </p>
       </header>
 

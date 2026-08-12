@@ -27,6 +27,27 @@ class Settings(BaseSettings):
     # Comma-separated list of origins allowed to call the API from a browser.
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
+    # --- Auth ---------------------------------------------------------------
+    # MUST be overridden in production -- anyone who knows this value can mint
+    # an admin token. Startup logs a warning while it is still the default.
+    jwt_secret: str = "dev-only-insecure-secret-change-me-before-deploying"
+    access_token_ttl_minutes: int = Field(default=30, ge=1)
+    refresh_token_ttl_days: int = Field(default=14, ge=1)
+
+    # Whether admin endpoints demand an ADMIN token. The brief says the admin
+    # side needs no auth, so this can be switched off for a bare demo; it
+    # defaults on because an open delete-event endpoint is not something to ship.
+    require_admin_auth: bool = True
+
+    # Seeded on first startup so a fresh install has a way in. Skipped entirely
+    # when a user with this email already exists.
+    bootstrap_admin_email: str = "admin@seatbook.dev"
+    bootstrap_admin_password: str = "admin12345"
+    bootstrap_admin_name: str = "Demo Admin"
+    create_bootstrap_admin: bool = True
+
+    debug: bool = False
+
     # --- Behaviour ----------------------------------------------------------
     # Guard rails on event creation so a typo cannot ask for a million seats.
     max_rows_per_event: int = Field(default=50, ge=1)

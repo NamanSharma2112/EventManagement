@@ -39,9 +39,104 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
 
 
+class UserRole(str, enum.Enum):
+    USER = "USER"
+    ADMIN = "ADMIN"
+
+
+class RevokedReason(str, enum.Enum):
+    """Why a refresh token stopped working.
+
+    The distinction matters: replaying a token that was revoked by *rotation*
+    means someone is using a token the real owner already spent -- treated as a
+    suspected leak, and every session for that account is dropped. Replaying one
+    that was revoked by an explicit *logout* is just a stale client, and must
+    not log the user out of their other devices.
+    """
+
+    ROTATED = "ROTATED"
+    LOGOUT = "LOGOUT"
+    REUSE_DETECTED = "REUSE_DETECTED"
+
+
 class BookingStatus(str, enum.Enum):
     CONFIRMED = "CONFIRMED"
     CANCELLED = "CANCELLED"
+
+
+class User(Base):
+    """An account. Only the bcrypt hash of the password is ever stored."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    full_name: Mapped[str] = mapped_column(String(120), nullable=False)
+
+    role: Mapped[UserRole] = mapped_column(
+        Enum(UserRole, native_enum=True, length=16),
+        nullable=False,
+        default=UserRole.USER,
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    bookings: Mapped[list[Booking]] = relationship(back_populates="user")
+    refresh_tokens: Mapped[list[RefreshToken]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+
+    @property
+    def is_admin(self) -> bool:
+        return self.role == UserRole.ADMIN
+
+    __table_args__ = (
+        # Emails are normalised to lower case before they are written, so a
+        # plain unique index is enough to make accounts case-insensitive.
+        UniqueConstraint("email", name="uq_users_email"),
+        {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
+    )
+
+
+class RefreshToken(Base):
+    """A refresh token's *hash*, so a database leak cannot be replayed.
+
+    Rotated on every use: refreshing revokes the presented token and issues a
+    new one. If an attacker and the real owner both hold the same token, the
+    second one to use it is rejected.
+    """
+
+    __tablename__ = "refresh_tokens"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_reason: Mapped[RevokedReason | None] = mapped_column(
+        Enum(RevokedReason, native_enum=True, length=20), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+
+    user: Mapped[User] = relationship(back_populates="refresh_tokens")
+
+    __table_args__ = (
+        UniqueConstraint("token_hash", name="uq_refresh_tokens_hash"),
+        Index("ix_refresh_tokens_user", "user_id"),
+        {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
+    )
 
 
 class SeatStatus(str, enum.Enum):
@@ -177,6 +272,14 @@ class Booking(Base):
     )
     reference: Mapped[str] = mapped_column(String(16), nullable=False)
 
+    # NULL for guest bookings. The brief requires booking without a login, so
+    # the account is an optional owner rather than a requirement: signed-in
+    # bookings gain "my bookings" and ownership checks on cancellation, guest
+    # bookings keep working exactly as before.
+    user_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
     booker_name: Mapped[str] = mapped_column(String(120), nullable=False)
     booker_email: Mapped[str] = mapped_column(String(255), nullable=False)
 
@@ -193,6 +296,7 @@ class Booking(Base):
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     event: Mapped[Event] = relationship(back_populates="bookings")
+    user: Mapped[User | None] = relationship(back_populates="bookings")
     seats: Mapped[list[BookingSeat]] = relationship(
         back_populates="booking", cascade="all, delete-orphan"
     )
@@ -201,6 +305,7 @@ class Booking(Base):
         UniqueConstraint("reference", name="uq_bookings_reference"),
         Index("ix_bookings_event_created", "event_id", "created_at"),
         Index("ix_bookings_email", "booker_email"),
+        Index("ix_bookings_user_created", "user_id", "created_at"),
         {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
     )
 
